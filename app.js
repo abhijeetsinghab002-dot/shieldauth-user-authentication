@@ -1,0 +1,14 @@
+let csrf = '';
+const statusBox = document.querySelector('#status');
+function status(text, bad=false){statusBox.textContent=text;statusBox.className=bad?'bad':'good'}
+async function api(url, options={}){const response=await fetch(url,{...options,headers:{'Content-Type':'application/json',...(csrf?{'X-CSRF-Token':csrf}:{}),...(options.headers||{})}});const body=await response.json();if(!response.ok)throw new Error(body.error||'Request failed.');return body}
+function formData(form){return Object.fromEntries(new FormData(form))}
+function showDashboard(user){csrf=user.csrf;document.querySelector('#auth').hidden=true;document.querySelector('#dashboard').hidden=false;document.querySelector('#welcome').textContent=`Signed in as ${user.email}`;document.querySelector('#role').textContent=user.role;document.querySelector('#admin').hidden=user.role!=='admin';if(user.role==='admin')loadUsers()}
+async function loadUsers(){const {users}=await api('/api/admin/users');document.querySelector('#users').innerHTML=users.map(u=>`<div class="user"><span>${u.email}</span><strong>${u.role}</strong></div>`).join('')}
+document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===button));document.querySelectorAll('.panel').forEach(x=>x.hidden=x.id!==button.dataset.tab);status('')}));
+document.querySelector('#register').addEventListener('submit',async event=>{event.preventDefault();try{const r=await api('/api/register',{method:'POST',body:JSON.stringify(formData(event.target))});status(r.message+' You can now sign in.')}catch(e){status(e.message,true)}});
+document.querySelector('#login').addEventListener('submit',async event=>{event.preventDefault();try{const r=await api('/api/login',{method:'POST',body:JSON.stringify(formData(event.target))});showDashboard(r);status('Authentication successful.')}catch(e){status(e.message,true)}});
+document.querySelector('#reset').addEventListener('submit',async event=>{event.preventDefault();try{const r=await api('/api/forgot-password',{method:'POST',body:JSON.stringify({email:formData(event.target).email})});event.target.elements.token.value=r.demoToken||'';status(r.message)}catch(e){status(e.message,true)}});
+document.querySelector('#apply-reset').addEventListener('click',async()=>{const f=formData(document.querySelector('#reset'));try{const r=await api('/api/reset-password',{method:'POST',body:JSON.stringify({token:f.token,password:f.password})});status(r.message)}catch(e){status(e.message,true)}});
+document.querySelector('#logout').addEventListener('click',async()=>{try{await api('/api/logout',{method:'POST',body:'{}'});csrf='';document.querySelector('#dashboard').hidden=true;document.querySelector('#auth').hidden=false;status('Logged out.')}catch(e){status(e.message,true)}});
+api('/api/me').then(showDashboard).catch(()=>{});
